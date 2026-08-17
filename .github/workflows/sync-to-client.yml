@@ -1,0 +1,47 @@
+name: Sync to Client Repository
+
+on:
+  push:
+    branches:
+      - "**"
+
+jobs:
+  sync:
+    name: Sync IX Repository to Client
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+
+      - name: Checkout IX repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add client repository
+        env:
+          CLIENT_TOKEN: ${{ secrets.CLIENT_REPO_TOKEN }}
+        run: |
+          git remote add client \
+            https://x-access-token:${CLIENT_TOKEN}@github.com/Mayank-53/client-sync-demo.git
+
+      - name: Push current branch to client
+        run: |
+          git push client HEAD:${{ github.ref_name }} --force
+
+      - name: Verify synchronization
+        run: |
+          git fetch client
+
+          echo "Source commit:"
+          git rev-parse HEAD
+
+          echo "Client commit:"
+          git rev-parse client/${{ github.ref_name }}
