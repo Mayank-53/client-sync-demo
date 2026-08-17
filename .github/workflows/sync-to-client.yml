@@ -1,15 +1,13 @@
-name: Sync IX Repository to Client
+name: Sync IX Main to Client Main
 
 on:
   push:
     branches:
-      - "**"
-    tags:
-      - "**"
+      - main
 
 jobs:
   sync:
-    name: Sync IX Repository to Client
+    name: Sync Main Branch to Client
     runs-on: ubuntu-latest
 
     permissions:
@@ -17,26 +15,20 @@ jobs:
 
     steps:
 
-      # ---------------------------------------------
       # 1. Checkout IX repository
-      # ---------------------------------------------
       - name: Checkout IX repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: false
 
-      # ---------------------------------------------
       # 2. Configure Git
-      # ---------------------------------------------
       - name: Configure Git
         run: |
           git config user.name "GitHub Actions"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      # ---------------------------------------------
       # 3. Add client repository
-      # ---------------------------------------------
       - name: Add client repository
         env:
           CLIENT_TOKEN: ${{ secrets.CLIENT_REPO_TOKEN }}
@@ -44,9 +36,7 @@ jobs:
           git remote add client \
             "https://x-access-token:${CLIENT_TOKEN}@github.com/Mayank-53/client-sync-demo.git"
 
-      # ---------------------------------------------
       # 4. Verify client repository access
-      # ---------------------------------------------
       - name: Verify client repository access
         env:
           CLIENT_TOKEN: ${{ secrets.CLIENT_REPO_TOKEN }}
@@ -54,106 +44,27 @@ jobs:
           git ls-remote \
             "https://x-access-token:${CLIENT_TOKEN}@github.com/Mayank-53/client-sync-demo.git"
 
-      # ---------------------------------------------
-      # 5. Sync branches
-      # ---------------------------------------------
-      - name: Sync branches
+      # 5. Push IX main to client main
+      - name: Sync main branch
         run: |
-          set -e
-
-          echo "Starting branch synchronization..."
-
-          git fetch origin --prune
-          git fetch client --prune
-
-          git for-each-ref \
-            --format='%(refname:strip=3)' \
-            refs/remotes/origin/
-
-           for branch in $(git for-each-ref \
-            --format='%(refname:strip=3)' \
-            refs/remotes/origin/ | \
-            grep -v '^HEAD$'); do
-
-            echo "Syncing branch: $branch"
-
-            git push client \
-              "refs/remotes/origin/$branch:refs/heads/$branch" \
-              --force
-
-          done
-
-      # ---------------------------------------------
-      # 6. Remove deleted branches
-      # ---------------------------------------------
-      - name: Remove deleted branches from client
-        run: |
-          set -e
-
-          echo "Checking for deleted branches..."
-
-          git fetch origin --prune
-          git fetch client --prune
-
-          for branch in $(git for-each-ref \
-            --format='%(refname:short)' \
-            refs/remotes/client/ | \
-            sed 's#^client/##' | \
-            grep -v '^HEAD$'); do
-
-            if ! git show-ref --verify \
-              --quiet "refs/remotes/origin/$branch"; then
-
-              echo "Branch '$branch' no longer exists in IX."
-              echo "Deleting '$branch' from client..."
-
-              git push client --delete "$branch" || true
-
-            fi
-
-          done
-
-      # ---------------------------------------------
-      # 7. Sync tags
-      # ---------------------------------------------
-      - name: Sync tags
-        run: |
-          echo "Synchronizing tags..."
-
           git push client \
-            --tags \
+            HEAD:refs/heads/main \
             --force
 
-      # ---------------------------------------------
-      # 8. Verify synchronization
-      # ---------------------------------------------
+      # 6. Verify synchronization
       - name: Verify synchronization
         run: |
-          echo "Fetching client repository..."
+          git fetch client main
 
-          git fetch client --prune --tags
+          SOURCE_COMMIT=$(git rev-parse HEAD)
+          CLIENT_COMMIT=$(git rev-parse client/main)
 
-          echo ""
-          echo "======================================"
-          echo "Synchronization completed successfully"
-          echo "======================================"
+          echo "Source commit: $SOURCE_COMMIT"
+          echo "Client commit: $CLIENT_COMMIT"
 
-          echo ""
-          echo "Source repository:"
-          echo "Mayank-53/ix-sync-demo"
-
-          echo ""
-          echo "Destination repository:"
-          echo "Mayank-53/client-sync-demo"
-
-          echo ""
-          echo "Source commit:"
-          git rev-parse HEAD
-
-          echo ""
-          echo "Client branches:"
-          git branch -r | grep "client/" || true
-
-          echo ""
-          echo "Client tags:"
-          git tag -l
+          if [ "$SOURCE_COMMIT" = "$CLIENT_COMMIT" ]; then
+            echo "Synchronization successful."
+          else
+            echo "Synchronization failed."
+            exit 1
+          fi
